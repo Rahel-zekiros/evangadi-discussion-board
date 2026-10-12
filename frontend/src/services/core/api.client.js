@@ -1,11 +1,12 @@
+
 import axios from "axios";
 
 /**
  * Configured axios instance for API communication.
  */
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:5000",
-  timeout: 60000, // in milli-second or 10 seconds timeout
+  baseURL: import.meta.env.VITE_API_BASE_URL || "",
+  timeout: 60000,
   headers: {
     "Content-Type": "application/json",
   },
@@ -25,18 +26,14 @@ apiClient.interceptors.request.use(
 
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  },
+  (error) => Promise.reject(error),
 );
 
 /**
  * Response interceptor to handle global errors and auth session expirations.
  */
 apiClient.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   (error) => {
     const isAuthEndpoint =
       error.config?.url?.includes("/api/auth/login") ||
@@ -46,7 +43,6 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem("authToken");
       localStorage.removeItem("activeUser");
-
       window.location.href = "/auth";
     }
 
