@@ -2,6 +2,8 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
+
 // ==========================================
 // Controllers & Validations (Imports)
 // ==========================================
@@ -14,20 +16,23 @@ import {
   getDocumentFileController,
 } from "../controller/rag.controller.js";
 
-
 import { documentIdParamValidation } from "../validation/rag.validation.js";
 import authMiddleware from '../../../middleware/authentication.js';
 
 const router = express.Router();
 
 // ==========================================
-// Upload Folder
+// Upload Folder (Vercel-Safe using os.tmpdir)
 // ==========================================
 
-const uploadDir = 'uploads/cohort_materials';
+const uploadDir = path.join(os.tmpdir(), 'cohort_materials');
 
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (error) {
+  console.error("Could not create upload directory:", error);
 }
 
 // ==========================================
@@ -76,7 +81,6 @@ const upload = multer({
 // Routes
 // ==========================================
 
-
 // ==========================================
 // List Documents
 // GET /api/rag/documents
@@ -88,7 +92,7 @@ router.get(
 );
 
 // ==========================================
-//  Upload PDF or TXT
+// Upload PDF or TXT
 // POST /api/rag/upload
 // ==========================================
 router.post(
@@ -99,7 +103,7 @@ router.post(
 );
 
 // ==========================================
-//  Semantic Search
+// Semantic Search
 // POST /api/rag/search
 // ==========================================
 router.post(
@@ -119,7 +123,7 @@ router.post(
 );
 
 // ==========================================
-//  Delete Document with Validation (by documentId)
+// Delete Document with Validation (by documentId)
 // DELETE /api/rag/documents/:documentId
 // ==========================================
 router.delete(
@@ -136,4 +140,5 @@ router.get(
   documentIdParamValidation,
   getDocumentFileController,
 );
+
 export default router;
