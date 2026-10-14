@@ -2,9 +2,17 @@ import { apiClient } from "../core/api.client.js";
 
 async function registerAccount(formData) {
   try {
-    clearSessionData(); 
-    const res = await apiClient.post("/api/auth/register", formData);
-    return { user: res.data.user };
+    clearSessionData();
+
+    const res = await apiClient.post(
+      "/api/auth/register",
+      formData
+    );
+
+    return {
+      user: res.data.user,
+      token: res.data.accessToken || res.data.token || null,
+    };
   } catch (err) {
     throw parseAuthException(err);
   }
@@ -19,21 +27,27 @@ async function loginAccount(credentials) {
     const token = res.data.accessToken || res.data.token;
     const user = res.data.user;
 
-    if (token) {
-      localStorage.setItem("authToken", token);
-      apiClient.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    if (!token || !user) {
+      throw new Error("Login response is missing token or user.");
     }
 
-    if (user) {
-      localStorage.setItem("activeUser", JSON.stringify(user));
-    }
+    localStorage.setItem("authToken", token);
+    localStorage.setItem("activeUser", JSON.stringify(user));
+
+    apiClient.defaults.headers.common["Authorization"] = `Bearer ${token}`;
 
     return { user, token };
   } catch (err) {
     clearSessionData();
-    throw parseAuthException(err);
+
+    if (err.response) {
+      throw parseAuthException(err);
+    }
+
+    throw err;
   }
 }
+
 
 async function verifyActiveSession() {
   try {

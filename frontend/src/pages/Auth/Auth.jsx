@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { motion as Motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -9,6 +10,7 @@ import {
   EyeOff,
   MessageSquare,
 } from "lucide-react";
+
 import { useAuth } from "../../contexts/AuthContext";
 import styles from "./Auth.module.css";
 
@@ -40,9 +42,11 @@ const validateAuthInput = ({
     if (!firstName.trim()) {
       return "First name cannot be empty.";
     }
+
     if (!lastName.trim()) {
       return "Last name cannot be empty.";
     }
+
     if (password.length < 6 || !/\d/.test(password)) {
       return "Password must be 6+ characters and include a number.";
     }
@@ -62,31 +66,47 @@ const getRememberedEmail = () => {
 export default function Auth() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signup, signin, authError, clearAuthError } = useAuth();
+
+  const {
+    signup,
+    signin,
+    authError,
+    clearAuthError,
+    isAuthenticating,
+  } = useAuth();
 
   const [isSignInMode, setIsSignInMode] = useState(true);
+
   const [fnameInput, setFnameInput] = useState("");
   const [lnameInput, setLnameInput] = useState("");
   const [emailInput, setEmailInput] = useState(getRememberedEmail);
   const [passInput, setPassInput] = useState("");
+
   const [rememberMe, setRememberMe] = useState(() =>
     Boolean(getRememberedEmail()),
   );
-  const [isPassVisible, setIsPassVisible] = useState(false);
 
+  const [isPassVisible, setIsPassVisible] = useState(false);
   const [localError, setLocalError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [authSuccessNotice, setAuthSuccessNotice] = useState(null);
 
+  const isProcessing = isSubmitting || isAuthenticating;
+
   const toggleAuthMode = () => {
     setIsSignInMode((prev) => !prev);
+
     setLocalError(null);
     setAuthSuccessNotice(null);
+
     clearAuthError();
   };
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
+
+    if (isProcessing) return;
+
     setLocalError(null);
     setAuthSuccessNotice(null);
     clearAuthError();
@@ -108,26 +128,35 @@ export default function Auth() {
 
     setIsSubmitting(true);
 
-    if (rememberMe) {
-      localStorage.setItem("remembered_email", cleanEmail);
-    } else {
-      localStorage.removeItem("remembered_email");
-    }
-
     try {
+      if (rememberMe && isSignInMode) {
+        localStorage.setItem("remembered_email", cleanEmail);
+      } else if (!rememberMe) {
+        localStorage.removeItem("remembered_email");
+      }
+
       if (isSignInMode) {
         const response = await signin({
           email: cleanEmail,
           password: passInput,
         });
-        if (response?.success) {
-          setAuthSuccessNotice("Sign-in successful. Redirecting...");
-          setPassInput("");
 
-          await new Promise((res) => setTimeout(res, 800));
-          const targetPath = location.state?.from?.pathname || "/";
-          navigate(targetPath, { replace: true });
+        if (!response?.success || !response.user) {
+          setLocalError(
+            response?.error || "Sign-in failed. Please try again.",
+          );
+          return;
         }
+
+        setAuthSuccessNotice("Sign-in successful. Redirecting...");
+
+        setPassInput("");
+
+        // Return to the page the user originally requested.
+        // Otherwise, open the main forum page.
+        const targetPath = location.state?.from?.pathname || "/dashboard";
+
+        navigate(targetPath, { replace: true });
       } else {
         const response = await signup({
           firstName: fnameInput.trim(),
@@ -136,17 +165,29 @@ export default function Auth() {
           password: passInput,
         });
 
-        if (response?.success) {
-          setAuthSuccessNotice("Account created successfully!");
-          setFnameInput("");
-          setLnameInput("");
-          setPassInput("");
-
-          navigate("/dashboard", { replace: true });
+        if (!response?.success || !response.user) {
+          setLocalError(
+            response?.error || "Registration failed. Please try again.",
+          );
+          return;
         }
+
+        setAuthSuccessNotice("Account created successfully!");
+
+        setFnameInput("");
+        setLnameInput("");
+        setPassInput("");
+
+        // signup must finish creating an authenticated session
+        // before this navigation happens.
+        const targetPath = location.state?.from?.pathname || "/dashboard";
+
+        navigate(targetPath, { replace: true });
       }
     } catch (err) {
-      setLocalError(err.message || "An error occurred during authentication.");
+      setLocalError(
+        err.message || "An error occurred during authentication.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -165,10 +206,19 @@ export default function Auth() {
               title="Go to Home"
               role="button"
               tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  navigate("/");
+                }
+              }}
             >
               <div className={styles.brandLogoBox} aria-hidden>
-                <MessageSquare className={styles.brandLogoIcon} size={22} />
+                <MessageSquare
+                  className={styles.brandLogoIcon}
+                  size={22}
+                />
               </div>
+
               <div className={styles.brandTextGroup}>
                 <p className={styles.brandTitle}>Evangadi Forum</p>
                 <p className={styles.brandTagline}>
@@ -176,9 +226,10 @@ export default function Auth() {
                 </p>
               </div>
             </div>
+
             <p className={styles.infoDescriptionText}>
-              Sign in to post technical questions, follow threads, and search
-              the forum with both keyword and AI similarity modes.
+              Sign in to post technical questions, follow threads, and
+              search the forum with both keyword and AI similarity modes.
             </p>
           </header>
 
@@ -187,23 +238,32 @@ export default function Auth() {
               <div className={styles.featureIconBox}>
                 <Sparkles size={20} />
               </div>
+
               <div className={styles.featureBody}>
-                <h3 className={styles.featureHeading}>Visible reasoning</h3>
+                <h3 className={styles.featureHeading}>
+                  Visible reasoning
+                </h3>
+
                 <p className={styles.featureText}>
-                  Threads stay readable: markdown, code blocks, and replies
-                  build a knowledge base.
+                  Threads stay readable: markdown, code blocks, and
+                  replies build a knowledge base.
                 </p>
               </div>
             </div>
+
             <div className={styles.featureCard}>
               <div className={styles.featureIconBox}>
                 <Code size={20} />
               </div>
+
               <div className={styles.featureBody}>
-                <h3 className={styles.featureHeading}>Low-friction workflow</h3>
+                <h3 className={styles.featureHeading}>
+                  Low-friction workflow
+                </h3>
+
                 <p className={styles.featureText}>
-                  One clean layout for asking, answering, and scanning search
-                  results.
+                  One clean layout for asking, answering, and scanning
+                  search results.
                 </p>
               </div>
             </div>
@@ -221,6 +281,7 @@ export default function Auth() {
                   />
                 ))}
               </div>
+
               <span className={styles.communityBadge}>
                 Evangadi cohorts · weekly stand-ups · peer review
               </span>
@@ -245,6 +306,7 @@ export default function Auth() {
                     ? "Sign in to your account"
                     : "Create an account"}
                 </h2>
+
                 <p className={styles.formSubtitleText}>
                   {isSignInMode
                     ? "Enter your credentials to access the forum."
@@ -252,75 +314,123 @@ export default function Auth() {
                 </p>
               </div>
 
-              <form className={styles.entryForm} onSubmit={handleAuthSubmit}>
+              <form
+                className={styles.entryForm}
+                onSubmit={handleAuthSubmit}
+              >
                 {!isSignInMode && (
                   <>
                     <div className={styles.fieldGroup}>
-                      <label htmlFor="fname" className={styles.fieldLabel}>
+                      <label
+                        htmlFor="fname"
+                        className={styles.fieldLabel}
+                      >
                         First Name
                       </label>
+
                       <input
                         id="fname"
+                        name="firstName"
                         type="text"
+                        autoComplete="given-name"
                         placeholder="First name"
                         className={styles.textInput}
                         value={fnameInput}
-                        onChange={(e) => setFnameInput(e.target.value)}
+                        onChange={(e) =>
+                          setFnameInput(e.target.value)
+                        }
+                        required
                       />
                     </div>
 
                     <div className={styles.fieldGroup}>
-                      <label htmlFor="lname" className={styles.fieldLabel}>
+                      <label
+                        htmlFor="lname"
+                        className={styles.fieldLabel}
+                      >
                         Last Name
                       </label>
+
                       <input
                         id="lname"
+                        name="lastName"
                         type="text"
+                        autoComplete="family-name"
                         placeholder="Last name"
                         className={styles.textInput}
                         value={lnameInput}
-                        onChange={(e) => setLnameInput(e.target.value)}
+                        onChange={(e) =>
+                          setLnameInput(e.target.value)
+                        }
+                        required
                       />
                     </div>
                   </>
                 )}
 
                 <div className={styles.fieldGroup}>
-                  <label htmlFor="email" className={styles.fieldLabel}>
+                  <label
+                    htmlFor="email"
+                    className={styles.fieldLabel}
+                  >
                     Email Address
                   </label>
+
                   <input
                     id="email"
+                    name="email"
                     type="email"
+                    autoComplete="email"
                     placeholder="Enter your email address"
                     className={styles.textInput}
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
+                    required
                   />
                 </div>
 
                 <div className={styles.fieldGroup}>
-                  <label htmlFor="pass" className={styles.fieldLabel}>
+                  <label
+                    htmlFor="pass"
+                    className={styles.fieldLabel}
+                  >
                     Password
                   </label>
+
                   <div className={styles.passwordInputWrapper}>
                     <input
                       id="pass"
+                      name="password"
                       type={isPassVisible ? "text" : "password"}
+                      autoComplete={
+                        isSignInMode
+                          ? "current-password"
+                          : "new-password"
+                      }
                       placeholder="••••••••"
                       className={`${styles.textInput} ${styles.passwordField}`}
                       value={passInput}
                       onChange={(e) => setPassInput(e.target.value)}
+                      required
                     />
+
                     <button
                       type="button"
                       className={styles.toggleEyeButton}
-                      onClick={() => setIsPassVisible(!isPassVisible)}
+                      onClick={() =>
+                        setIsPassVisible((prev) => !prev)
+                      }
                       aria-label={
-                        isPassVisible ? "Hide password" : "Show password"
+                        isPassVisible
+                          ? "Hide password"
+                          : "Show password"
                       }
                     >
-                      {isPassVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+                      {isPassVisible ? (
+                        <EyeOff size={18} />
+                      ) : (
+                        <Eye size={18} />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -331,20 +441,30 @@ export default function Auth() {
                       <input
                         type="checkbox"
                         checked={rememberMe}
-                        onChange={(e) => setRememberMe(e.target.checked)}
+                        onChange={(e) =>
+                          setRememberMe(e.target.checked)
+                        }
                       />
+
                       <span>Remember email</span>
                     </label>
                   </div>
                 )}
 
                 {authSuccessNotice && (
-                  <div className={styles.successNotification}>
+                  <div
+                    className={styles.successNotification}
+                    role="status"
+                  >
                     {authSuccessNotice}
                   </div>
                 )}
+
                 {displayedError && (
-                  <div className={styles.errorNotification}>
+                  <div
+                    className={styles.errorNotification}
+                    role="alert"
+                  >
                     {displayedError}
                   </div>
                 )}
@@ -353,15 +473,19 @@ export default function Auth() {
                   <button
                     type="submit"
                     className={styles.primaryActionButton}
-                    disabled={isSubmitting}
+                    disabled={isProcessing}
                   >
-                    {isSubmitting
+                    {isProcessing
                       ? "Processing..."
                       : isSignInMode
                         ? "Sign In"
                         : "Create Account"}
-                    {!isSubmitting && (
-                      <ArrowRight size={16} className={styles.actionIcon} />
+
+                    {!isProcessing && (
+                      <ArrowRight
+                        size={16}
+                        className={styles.actionIcon}
+                      />
                     )}
                   </button>
                 </div>
@@ -372,12 +496,16 @@ export default function Auth() {
                   {isSignInMode
                     ? "Don't have an account?"
                     : "Already have an account?"}
+
                   <button
                     type="button"
                     onClick={toggleAuthMode}
                     className={styles.switchModeBtn}
+                    disabled={isProcessing}
                   >
-                    {isSignInMode ? "Create an account" : "Back to sign in"}
+                    {isSignInMode
+                      ? "Create an account"
+                      : "Back to sign in"}
                   </button>
                 </p>
               </footer>
